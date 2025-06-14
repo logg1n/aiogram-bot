@@ -2,15 +2,16 @@ from flask import Flask, request, jsonify
 from dotenv import load_dotenv, set_key, get_key
 import os
 import json
+from flask import Blueprint
 
-app = Flask(__name__)
 
 # Загружаем переменные окружения
 load_dotenv()
 TOKEN_FILE = '.env'  # Файл для хранения токена
 
+routes = Blueprint("routes", __name__)
 
-@app.route('/notion-webhook', methods=['POST'])
+@routes.route('/notion-webhook', methods=['POST'])
 def handle_webhook():
 	try:
 		data = request.json
@@ -45,9 +46,3 @@ def handle_webhook():
 	except Exception as e:
 		print(f"❌ Ошибка: {str(e)}")
 		return jsonify({"error": str(e)}), 500
-
-
-if __name__ == '__main__':
-	if not os.path.exists(TOKEN_FILE):
-		print("⚠️ Файл .env не найден. Ожидаю верификационный запрос...")
-	app.run(host='0.0.0.0', port=5000)
