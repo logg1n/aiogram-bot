@@ -1,0 +1,48 @@
+# Виртуальное окружение
+venv/
+.venv/
+
+# Файлы PyCharm
+.idea/
+
+# Файлы окружения (переменные API-ключей и паролей)
+.env
+.env.local
+.env.*.local
+
+# Кэш Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Логи и временные файлы
+logs/
+*.log
+debug.log
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Тестовые покрытия
+.coverage
+htmlcov/
+*.cover
+*.py,cover
+
+# Бинарные файлы
+*.so
+*.dll
+*.dylib
+
+# Сборки
+build/
+dist/
+*.egg-info/
+
+# Docker (если используешь)
+docker-compose.override.yml
