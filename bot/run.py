@@ -3,7 +3,7 @@ import os
 
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
-from app.routers import router
+from bot.routers import router
 
 # Загрузка переменных
 load_dotenv()
