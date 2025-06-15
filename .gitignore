@@ -6,7 +6,7 @@ venv/
 .idea/
 
 # Файлы окружения (переменные API-ключей и паролей)
-bot/.env
+app/bot/.env
 .env.local
 .env.*.local
 
