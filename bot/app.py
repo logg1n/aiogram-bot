@@ -1,10 +1,13 @@
-from flask import Flask
-from webhook_notion import routes  # Импорт Blueprint с вебхуком
-from aiogram import Bot, Dispatcher
 import asyncio
 import threading
-from dotenv import load_dotenv
 import os
+
+from flask import Flask
+from dotenv import load_dotenv
+from aiogram import Bot, Dispatcher
+
+from webhook_notion import routes  # Импорт Blueprint с вебхуком
+from routers import router  # Импорт роутеров бота
 
 # Инициализация Flask
 app = Flask(__name__)
@@ -17,7 +20,6 @@ dp = Dispatcher()
 
 
 async def run_bot():
-	from bot.routers import router  # Импорт роутеров бота
 	dp.include_router(router)
 	await dp.start_polling(bot)
 
