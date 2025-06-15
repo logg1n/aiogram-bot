@@ -44,24 +44,33 @@ def handle_webhook():
 		data = request.get_json()
 		print("Тело запроса:", json.dumps(data, indent=2))
 
-		# 1. Верификационный запрос
-		if 'verification_token' in data:
-			verification_token = data['verification_token']
-			print(f"Получен verification_token: {verification_token}")
-
-			set_key(str(ENV_PATH), "NOTION_WEBHOOK_TOKEN", verification_token)
-
-			if 'challenge' in data:
+		# 1. Верификационный запрос (при создании вебхука)
+		if 'type' in data and data['type'] == 'webhook_verification':
+			challenge = data.get('challenge')
+			if challenge:
 				print("Отправляем challenge в ответ")
-				return jsonify({"challenge": get_key(str(ENV_PATH))}), 200
+				return jsonify({"challenge": challenge}), 200
 
-			return jsonify({"status": "Token saved"}), 200
+		# 2. Проверка подписи для обычных вебхуков
+		if not verify_notion_signature(request):
+			print("Неверная подпись вебхука")
+			return jsonify({"error": "Invalid signature"}), 403
 
-		# 2. Обработка обычного вебхука
-		saved_token = get_key(str(ENV_PATH), "NOTION_WEBHOOK_TOKEN")
-		if not saved_token:
-			print("Токен не найден в .env")
-			return jsonify({"error": "Token not registered"}), 403
+		# 3. Обработка событий
+		event_type = data.get('type')
+		object_type = data.get('object')
+
+		print(f"Событие: {event_type}, Объект: {object_type}")
+
+		# Пример обработки разных событий
+		if object_type == 'page':
+			page_id = data.get('id')
+			print(f"Обработка страницы: {page_id}")
+
+			if event_type == 'page.created':
+				print("Новая страница создана")
+			elif event_type == 'page.updated':
+				print("Страница обновлена")
 
 		incoming_token = request.headers.get('X-Notion-Signature', '')
 		if incoming_token and incoming_token != saved_token:
