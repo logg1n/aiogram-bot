@@ -1,3 +1,5 @@
+# Настройка для продакшена
+from waitress import serve
 from flask import Flask
 from dotenv import load_dotenv
 import os
@@ -6,7 +8,7 @@ import os
 app = Flask(__name__)
 
 # Загрузка переменных окружения
-load_dotenv('../.env')  # Указываем путь к .env на уровень выше
+load_dotenv('../bot/.env')  # Указываем путь к .env на уровень выше
 
 # Регистрация blueprint (перенесем ваш код)
 from flask import Blueprint, request, jsonify
@@ -28,14 +30,14 @@ def handle_webhook():
 		# 1. Верификационный запрос
 		if 'verification_token' in data:
 			verification_token = data['verification_token']
-			set_key('../.env', "NOTION_WEBHOOK_TOKEN", verification_token)
+			set_key('../bot/.env', "NOTION_WEBHOOK_TOKEN", verification_token)
 
 			if 'challenge' in data:
 				return jsonify({"challenge": data['challenge']}), 200
 			return jsonify({"status": "Token saved"}), 200
 
 		# 2. Обработка обычного вебхука
-		saved_token = get_key('../.env', "NOTION_WEBHOOK_TOKEN")
+		saved_token = get_key('../bot/.env', "NOTION_WEBHOOK_TOKEN")
 		if not saved_token:
 			return jsonify({"error": "Token not registered"}), 403
 
@@ -57,7 +59,5 @@ def handle_webhook():
 app.register_blueprint(routes)
 
 if __name__ == '__main__':
-	# Настройка для продакшена
-	from waitress import serve
 
 	serve(app, host="0.0.0.0", port=5000)
