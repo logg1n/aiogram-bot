@@ -12,7 +12,7 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: Message):
 	await message.reply(
-		f'Привет.\n Твой ID: {message.from_user.id}\nИмя: {message.from_user.first_name}\n',
+		f'Привет.\n Твой ID: {message.from_user.id}\nИмя: {message.from_user.first_name}\nЧат ID: {message.chat.id}',
 		reply_markup=await inline_cars(),
 
 	)
