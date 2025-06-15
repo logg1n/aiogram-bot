@@ -51,10 +51,16 @@ def handle_webhook():
 				print("Отправляем challenge в ответ")
 				return jsonify({"challenge": challenge}), 200
 
-		# 2. Проверка подписи для обычных вебхуков
-		if not verify_notion_signature(request):
-			print("Неверная подпись вебхука")
-			return jsonify({"error": "Invalid signature"}), 403
+		# 2. Обработка обычного вебхука
+		saved_token = get_key(str(ENV_PATH), "NOTION_WEBHOOK_TOKEN")
+		if not saved_token:
+			print("Токен не найден в .env")
+			return jsonify({"error": "Token not registered"}), 403
+
+		incoming_token = request.headers.get('X-Notion-Signature', '')
+		if incoming_token and incoming_token != saved_token:
+			print("Неверный токен в заголовке")
+			return jsonify({"error": "Invalid token"}), 403
 
 		# 3. Обработка событий
 		event_type = data.get('type')
@@ -71,11 +77,6 @@ def handle_webhook():
 				print("Новая страница создана")
 			elif event_type == 'page.updated':
 				print("Страница обновлена")
-
-		incoming_token = request.headers.get('X-Notion-Signature', '')
-		if incoming_token and incoming_token != saved_token:
-			print("Неверный токен в заголовке")
-			return jsonify({"error": "Invalid token"}), 403
 
 		print("Вебхук успешно обработан")
 		return jsonify({"status": "success"}), 200
