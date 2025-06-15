@@ -2,10 +2,10 @@ from aiogram import F, Router
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 
-from bot.trade import get_info_ticker
-from bot.keyboard import reply_keyboard_markup as rkm
-from bot.keyboard import inline_keyboard_markup as ikm
-from bot.keyboard import inline_cars
+from trade import get_info_ticker
+from keyboard import reply_keyboard_markup as rkm
+from keyboard import inline_keyboard_markup as ikm
+from keyboard import inline_cars
 
 router = Router()
 
