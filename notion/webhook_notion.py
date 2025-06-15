@@ -53,7 +53,7 @@ def handle_webhook():
 
 			if 'challenge' in data:
 				print("Отправляем challenge в ответ")
-				return jsonify({"challenge": data['challenge']}), 200
+				return jsonify({"challenge": verification_token}), 200
 
 			return jsonify({"status": "Token saved"}), 200
 
