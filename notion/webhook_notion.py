@@ -7,8 +7,9 @@ import os
 # Инициализация Flask приложения
 app = Flask(__name__)
 
+ENV_PATH = '.env'
 # Загрузка переменных окружения
-load_dotenv('.env')  # Указываем путь к .env на уровень выше
+load_dotenv(ENV_PATH)  # Указываем путь к .env на уровень выше
 
 # Регистрация blueprint (перенесем ваш код)
 from flask import Blueprint, request, jsonify
