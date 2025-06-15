@@ -1,100 +1,145 @@
+import logging
+from logging.handlers import RotatingFileHandler
 from waitress import serve
 from flask import Flask, request, jsonify, Blueprint
-from dotenv import load_dotenv, set_key, get_key
+from dotenv import load_dotenv
 import os
 import hmac
 import hashlib
 import json
 
+# Настройка логирования
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            RotatingFileHandler(
+                'notion_webhook.log',
+                maxBytes=1024*1024,  # 1 MB
+                backupCount=3
+            ),
+            logging.StreamHandler()
+        ]
+    )
+    return logging.getLogger(__name__)
+
+logger = setup_logging()
+
 # Инициализация Flask приложения
 app = Flask(__name__)
-
-ENV_PATH = '.env'
-load_dotenv(ENV_PATH)
-
+load_dotenv('.env')
 routes = Blueprint("routes", __name__)
 
+class NotionWebhookVerifier:
+    @staticmethod
+    def verify_signature(request):
+        """Проверка подписи Notion вебхука"""
+        secret = os.getenv('NOTION_WEBHOOK_SECRET')
+        if not secret:
+            logger.error("Notion secret not configured")
+            return False
 
-def verify_notion_signature(request):
-	"""Проверка подписи Notion вебхука"""
-	secret = os.getenv('NOTION_WEBHOOK_TOKEN')
-	if not secret:
-		return False
+        signature = request.headers.get('Notion-Signature')
+        if not signature:
+            logger.warning("Missing Notion-Signature header")
+            return False
 
-	signature = request.headers.get('Notion-Signature')
-	if not signature:
-		return False
+        body = request.get_data()
+        computed_signature = hmac.new(
+            secret.encode('utf-8'),
+            body,
+            hashlib.sha256
+        ).hexdigest()
 
-	body = request.get_data()
-	computed_signature = hmac.new(
-		secret.encode('utf-8'),
-		body,
-		hashlib.sha256
-	).hexdigest()
-
-	return hmac.compare_digest(signature, computed_signature)
-
+        return hmac.compare_digest(signature, computed_signature)
 
 @routes.route('/notion-webhook', methods=['GET', 'POST'])
 def handle_webhook():
-	print(f"\n=== Новый запрос {request.method} ===")
-	print("Заголовки:", dict(request.headers))
+    logger.info(f"Received {request.method} request to /notion-webhook")
 
-	try:
-		# GET-метод для проверки работы
-		if request.method == 'GET':
-			print("GET-запрос получен")
-			return jsonify({
-				"status": "Webhook is running",
-				"env_file": str(ENV_PATH),
-				"env_exists": os.path.exists(ENV_PATH),
-				"current_secret": bool(get_key(str(ENV_PATH), "NOTION_WEBHOOK_TOKEN"))
-			}), 200
+    try:
+        # GET-метод для проверки работы
+        if request.method == 'GET':
+            logger.info("Health check request received")
+            return jsonify({
+                "status": "Webhook is operational",
+                "environment_file": os.path.abspath('.env'),
+                "secret_configured": bool(os.getenv('NOTION_WEBHOOK_SECRET'))
+            }), 200
 
-		# POST-метод (основная логика)
-		if not request.is_json:
-			print("Ошибка: Content-Type не application/json")
-			return jsonify({"error": "Request must be JSON"}), 400
+        # POST-метод (основная логика)
+        if not request.is_json:
+            logger.error("Invalid content type, expected JSON")
+            return jsonify({"error": "Request must be JSON"}), 400
 
-		data = request.get_json()
-		print("Тело запроса:", json.dumps(data, indent=2))
+        data = request.get_json()
+        logger.debug(f"Request payload: {json.dumps(data, indent=2)}")
 
-		# 1. Верификационный запрос (при создании вебхука)
-		if 'type' in data and data['type'] == 'webhook_verification':
-			challenge = data.get('challenge')
-			if challenge:
-				print("Отправляем challenge в ответ")
-				return jsonify({"challenge": challenge}), 200
+        # Верификационный запрос
+        if data.get('type') == 'webhook_verification':
+            challenge = data.get('challenge')
+            if challenge:
+                logger.info("Handling webhook verification challenge")
+                return jsonify({"challenge": challenge}), 200
 
-		# 2. Проверка подписи для обычных вебхуков
-		if not verify_notion_signature(request):
-			print("Неверная подпись вебхука")
-			return jsonify({"error": "Invalid signature"}), 403
+        # Проверка подписи
+        if not NotionWebhookVerifier.verify_signature(request):
+            logger.error("Signature verification failed")
+            return jsonify({"error": "Invalid signature"}), 403
 
-		# 3. Обработка событий
-		event_type = data.get('type')
-		object_type = data.get('object')
+        # Обработка событий
+        return handle_notion_event(data)
 
-		print(f"Событие: {event_type}, Объект: {object_type}")
+    except Exception as e:
+        logger.exception("Unexpected error processing webhook")
+        return jsonify({"error": "Internal server error"}), 500
 
-		# Пример обработки разных событий
-		if object_type == 'page':
-			page_id = data.get('id')
-			print(f"Обработка страницы: {page_id}")
+def handle_notion_event(data):
+    """Обработка событий от Notion"""
+    event_type = data.get('type')
+    object_type = data.get('object')
+    event_id = data.get('id')
 
-			if event_type == 'page.created':
-				print("Новая страница создана")
-			elif event_type == 'page.updated':
-				print("Страница обновлена")
+    logger.info(f"Processing {event_type} event for {object_type} (ID: {event_id})")
 
-		return jsonify({"status": "success"}), 200
+    if object_type == 'page':
+        handle_page_event(event_type, data)
+    elif object_type == 'database':
+        handle_database_event(event_type, data)
+    else:
+        logger.info(f"Unhandled object type: {object_type}")
 
-	except Exception as e:
-		print(f"Критическая ошибка: {str(e)}")
-		return jsonify({"error": str(e)}), 500
+    return jsonify({"status": "processed"}), 200
 
+def handle_page_event(event_type, data):
+    """Обработка событий страницы"""
+    page_id = data.get('id')
+    page_title = data.get('properties', {}).get('title', {}).get('title', [{}])[0].get('plain_text', 'Untitled')
+
+    if event_type == 'page.created':
+        logger.info(f"New page created: {page_title} (ID: {page_id})")
+    elif event_type == 'page.updated':
+        logger.info(f"Page updated: {page_title} (ID: {page_id})")
+    else:
+        logger.info(f"Unhandled page event type: {event_type}")
+
+def handle_database_event(event_type, data):
+    """Обработка событий базы данных"""
+    database_id = data.get('id')
+    database_title = data.get('title', [{}])[0].get('plain_text', 'Untitled')
+
+    if event_type == 'database.updated':
+        logger.info(f"Database updated: {database_title} (ID: {database_id})")
+    else:
+        logger.info(f"Unhandled database event type: {event_type}")
 
 app.register_blueprint(routes)
 
 if __name__ == '__main__':
-	serve(app, host="0.0.0.0", port=5000)
+    logger.info("Starting Notion webhook server")
+    try:
+        serve(app, host="0.0.0.0", port=5000)
+    except Exception as e:
+        logger.critical(f"Server failed to start: {str(e)}")
+        raise
