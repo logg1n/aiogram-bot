@@ -12,10 +12,26 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: Message):
 	await message.reply(
-		f'Привет.\n Твой ID: {message.from_user.id}\nИмя: {message.from_user.first_name}',
+		f'Привет.\n Твой ID: {message.from_user.id}\nИмя: {message.from_user.first_name}\n',
 		reply_markup=await inline_cars(),
 
 	)
+
+
+@router.message(Command('chatid'))
+async def send_chat_id(message: Message):
+	chat_id = message.chat.id
+	response_text = f"🆔 Ваш chat_id: `{chat_id}`"
+
+	# Для групп/каналов добавляем дополнительную информацию
+	if message.chat.type != 'private':
+		response_text += (
+			f"\n\nℹ️ Дополнительно:\n"
+			f"Тип чата: `{message.chat.type}`\n"
+			f"Название: `{message.chat.title}`"
+		)
+
+	await message.reply(response_text, parse_mode='Markdown')
 
 @router.message(Command('help'))
 async def cmd_help(message: Message):
