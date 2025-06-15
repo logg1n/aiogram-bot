@@ -37,7 +37,7 @@ logger = setup_logging()
 class NotionWebhookHandler:
 	@staticmethod
 	def verify_signature(request):
-		secret = os.getenv('NOTION_WEBHOOK_SECRET')
+		secret = os.getenv('NOTION_WEBHOOK_TOKEN')
 		if not secret:
 			logger.error("Notion secret not configured")
 			return False
