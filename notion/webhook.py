@@ -48,11 +48,6 @@ class NotionWebhookHandler:
 			return False
 
 		try:
-			logger.info(f"Secret from env: {secret}")
-			logger.info(f"Computed signature: {signature}")
-			# В verify_signature
-			logger.info(f"Signature verification result: {hmac.compare_digest(signature, computed_signature)}")
-
 			body = request.get_data()
 			computed_signature = hmac.new(
 				secret.encode('utf-8'),
@@ -60,7 +55,10 @@ class NotionWebhookHandler:
 				hashlib.sha256
 			).hexdigest()
 
-			return hmac.compare_digest(signature, computed_signature)
+			# Убедитесь, что используем правильное имя переменной
+			logger.info(f"Signature check: {signature} == sha256={computed_signature}")
+			return hmac.compare_digest(signature, f"sha256={computed_signature}")
+
 		except Exception as e:
 			logger.error(f"Signature verification error: {str(e)}")
 			return False
