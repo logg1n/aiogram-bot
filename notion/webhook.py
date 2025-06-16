@@ -48,16 +48,28 @@ class NotionWebhookHandler:
 			return False
 
 		try:
+			# Получаем сырые данные как bytes
 			body = request.get_data()
+			logger.info(f"Raw body length: {len(body)} bytes")
+
+			# Вычисляем подпись в точном соответствии с документацией Notion
 			computed_signature = hmac.new(
 				secret.encode('utf-8'),
 				body,
 				hashlib.sha256
 			).hexdigest()
 
-			# Убедитесь, что используем правильное имя переменной
-			logger.info(f"Signature check: {signature} == sha256={computed_signature}")
-			return hmac.compare_digest(signature, f"sha256={computed_signature}")
+			# Формируем подпись в формате 'sha256=...'
+			expected_signature = f"sha256={computed_signature}"
+
+			# Сравниваем подписи безопасным способом
+			result = hmac.compare_digest(signature, expected_signature)
+
+			logger.info(f"Signature verification {'successful' if result else 'failed'}")
+			logger.info(f"Expected: {expected_signature}")
+			logger.info(f"Received: {signature}")
+
+			return result
 
 		except Exception as e:
 			logger.error(f"Signature verification error: {str(e)}")
@@ -127,6 +139,8 @@ def process_notion_event(data):
 @routes.route('/notion-webhook', methods=['GET', 'POST'])
 def webhook_endpoint():
 	try:
+		send_telegram_notification("Test message from webhook")
+
 		logger.info(f"Incoming {request.method} request from {request.remote_addr}")
 		logger.info(f"Headers: {dict(request.headers)}")
 		logger.info(f"Content-Type: {request.content_type}")
