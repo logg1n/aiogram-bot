@@ -103,43 +103,36 @@ def send_telegram_notification(message):
 
 
 def process_notion_event(data):
-	event_type = data.get('type')
-	object_type = data.get('object')
-	object_id = data.get('id')
-
-	# Извлекаем заголовок страницы
-	title = "Untitled"
 	try:
-		title_prop = data.get('properties', {}).get('title', {})
-		if isinstance(title_prop.get('title'), list) and len(title_prop['title']) > 0:
-			title = title_prop['title'][0].get('text', {}).get('content', 'Untitled')
+		# Для событий обновления страницы
+		if data.get('type') in ['page.updated', 'page.properties_updated']:
+			page_id = data.get('entity', {}).get('id', '')
+			title = "No title"
+
+			# Попробуйте получить заголовок из разных мест
+			if data.get('properties', {}).get('title'):
+				title = data['properties']['title'][0]['text']['content']
+			elif data.get('data', {}).get('title'):
+				title = data['data']['title']
+
+			message = f"📄 Page updated\nID: {page_id}\nTitle: {title}"
+			send_telegram_notification(message)
+			return {"status": "processed"}
+
+		# Для других событий
+		else:
+			logger.warning(f"Unhandled event type: {data.get('type')}")
+			return {"status": "skipped"}
+
 	except Exception as e:
-		logger.error(f"Error parsing title: {str(e)}")
-
-	# Формируем сообщение для Telegram
-	message = (
-		f"📢 *Notion Update*\n"
-		f"*Type:* {event_type}\n"
-		f"*Object:* {object_type}\n"
-		f"*Title:* {title}\n"
-		f"*ID:* `{object_id}`"
-	)
-
-	# Отправляем в Telegram
-	send_telegram_notification(message)
-
-	return {
-		"status": "processed",
-		"event": event_type,
-		"object": object_type,
-		"id": object_id
-	}
+		logger.error(f"Error processing event: {str(e)}")
+		return {"status": "error"}
 
 
 @routes.route('/notion-webhook', methods=['GET', 'POST'])
 def webhook_endpoint():
 	try:
-		send_telegram_notification("Test message from webhook")
+
 
 		logger.info(f"Incoming {request.method} request from {request.remote_addr}")
 		logger.info(f"Headers: {dict(request.headers)}")
@@ -159,6 +152,7 @@ def webhook_endpoint():
 
 		try:
 			data = request.get_json()
+			send_telegram_notification("Test message from webhook")
 			# После request.get_json()
 			logger.info(f"Full event type: {data.get('type')}")
 			logger.info(f"Object type: {data.get('object')}")
