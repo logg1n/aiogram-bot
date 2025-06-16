@@ -125,6 +125,9 @@ def process_notion_event(data):
 def webhook_endpoint():
 	try:
 		logger.info(f"Incoming {request.method} request from {request.remote_addr}")
+		logger.info(f"Headers: {dict(request.headers)}")
+		logger.info(f"Content-Type: {request.content_type}")
+		logger.info(f"Raw body (first 200 chars): {str(request.get_data())[:200]}")
 
 		if request.method == 'GET':
 			return jsonify({
