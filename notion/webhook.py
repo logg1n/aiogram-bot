@@ -48,6 +48,11 @@ class NotionWebhookHandler:
 			return False
 
 		try:
+			logger.info(f"Secret from env: {secret}")
+			logger.info(f"Computed signature: {signature}")
+			# В verify_signature
+			logger.info(f"Signature verification result: {hmac.compare_digest(signature, computed_signature)}")
+
 			body = request.get_data()
 			computed_signature = hmac.new(
 				secret.encode('utf-8'),
@@ -140,7 +145,15 @@ def webhook_endpoint():
 			logger.error("Invalid content type")
 			return jsonify({"error": "Content-Type must be application/json"}), 400
 
-		data = request.get_json()
+		try:
+			data = request.get_json()
+			# После request.get_json()
+			logger.info(f"Full event type: {data.get('type')}")
+			logger.info(f"Object type: {data.get('object')}")
+			logger.info(f"Parsed JSON data: {data}")
+		except Exception as e:
+			logger.error(f"JSON parse error: {str(e)}")
+			raise
 		logger.debug(f"Request data: {json.dumps(data, indent=2)}")
 
 		# Верификационный запрос
@@ -152,6 +165,7 @@ def webhook_endpoint():
 
 		# Проверка подписи
 		if not NotionWebhookHandler.verify_signature(request):
+
 			return jsonify({"error": "Invalid signature"}), 403
 
 		# Обработка события
