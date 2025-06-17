@@ -48,24 +48,26 @@ class NotionWebhookHandler:
 			return False
 
 		try:
-			# Получаем сырые данные как bytes
-			body = request.get_data()
-			logger.info(f"Raw body length: {len(body)} bytes")
+			# Определяем, что использовать для подписи
+			if request.content_type == 'application/json':
+				# Для обычных запросов используем сырое тело
+				body = request.get_data()
+			else:
+				# Для верификационных запросов создаем JSON с verification_token
+				body = json.dumps({"verification_token": secret})
 
-			# Вычисляем подпись в точном соответствии с документацией Notion
+			logger.info(f"Body for signature: {body[:100]}...")
+
 			computed_signature = hmac.new(
 				secret.encode('utf-8'),
-				request.headers.get("verification_token").encode('utf-8'),
+				body.encode('utf-8') if isinstance(body, str) else body,
 				hashlib.sha256
 			).hexdigest()
 
-			# Формируем подпись в формате 'sha256=...'
 			expected_signature = f"sha256={computed_signature}"
-
-			# Сравниваем подписи безопасным способом
 			result = hmac.compare_digest(signature, expected_signature)
 
-			logger.info(f"Signature verification {'successful' if result else 'failed'}")
+			logger.info(f"Signature check: {'SUCCESS' if result else 'FAILED'}")
 			logger.info(f"Expected: {expected_signature}")
 			logger.info(f"Received: {signature}")
 
@@ -89,7 +91,7 @@ def send_telegram_notification(message):
 			f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
 			json={
 				"chat_id": CHAT_ID,
-				"text": message[50],
+				"text": message[:50] if message else "Empty message",
 				"parse_mode": "Markdown"
 			},
 			timeout=5
@@ -128,8 +130,8 @@ def process_notion_event(data):
 @routes.route('/notion-webhook', methods=['GET', 'POST'])
 def webhook_endpoint():
 	try:
-
-
+		logger.info(f"Token: {os.getenv('NOTION_WEBHOOK_TOKEN')[:5]}...")
+		logger.info(f"Telegram token: {os.getenv('TELEGRAM_BOT_TOKEN')[:5]}...")
 		logger.info(f"Incoming {request.method} request from {request.remote_addr}")
 		logger.info(f"Headers: {dict(request.headers)}")
 		logger.info(f"Content-Type: {request.content_type}")
@@ -148,7 +150,7 @@ def webhook_endpoint():
 
 		try:
 			data = request.get_json()
-			send_telegram_notification(data)
+
 			# После request.get_json()
 			logger.info(f"Full event type: {data.get('type')}")
 			logger.info(f"Object type: {data.get('object')}")
