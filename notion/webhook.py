@@ -91,7 +91,7 @@ def send_telegram_notification(message):
 	try:
 		response = requests.post(
 			f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-			json={
+			data={
 				"chat_id": CHAT_ID,
 				"text": message[:1000] if message else "Empty message",
 				"parse_mode": "Markdown"
