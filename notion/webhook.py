@@ -3,6 +3,8 @@ import hmac
 import hashlib
 import json
 import requests
+
+from waitress import serve
 from flask import Flask, request, jsonify, Blueprint
 from dotenv import load_dotenv
 import logging
@@ -91,7 +93,7 @@ def send_telegram_notification(message):
 			f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
 			json={
 				"chat_id": CHAT_ID,
-				"text": message[:50] if message else "Empty message",
+				"text": message[:1000] if message else "Empty message",
 				"parse_mode": "Markdown"
 			},
 			timeout=5
@@ -183,7 +185,6 @@ def webhook_endpoint():
 app.register_blueprint(routes)
 
 if __name__ == '__main__':
-	from waitress import serve
 
 	port = int(os.getenv('PORT', 5000))
 	logger.info(f"Starting server on port {port}")
