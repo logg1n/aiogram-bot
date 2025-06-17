@@ -89,7 +89,7 @@ def send_telegram_notification(message):
 			f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
 			json={
 				"chat_id": CHAT_ID,
-				"text": message,
+				"text": message[50],
 				"parse_mode": "Markdown"
 			},
 			timeout=5
