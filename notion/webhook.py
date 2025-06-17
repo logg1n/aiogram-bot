@@ -55,7 +55,7 @@ class NotionWebhookHandler:
 			# Вычисляем подпись в точном соответствии с документацией Notion
 			computed_signature = hmac.new(
 				secret.encode('utf-8'),
-				body,
+				request.headers.get("verification_token").encode('utf-8'),
 				hashlib.sha256
 			).hexdigest()
 
@@ -103,30 +103,26 @@ def send_telegram_notification(message):
 
 
 def process_notion_event(data):
-	try:
-		# Для событий обновления страницы
-		if data.get('type') in ['page.updated', 'page.properties_updated']:
-			page_id = data.get('entity', {}).get('id', '')
-			title = "No title"
+	event_type = data.get('type')  # page.content_updated, page.properties_updated и т.д.
+	entity_type = data.get('entity', {}).get('type')  # page, database, block
 
-			# Попробуйте получить заголовок из разных мест
-			if data.get('properties', {}).get('title'):
-				title = data['properties']['title'][0]['text']['content']
-			elif data.get('data', {}).get('title'):
-				title = data['data']['title']
+	logger.info(f"Processing event: {event_type} (entity: {entity_type})")
 
-			message = f"📄 Page updated\nID: {page_id}\nTitle: {title}"
-			send_telegram_notification(message)
-			return {"status": "processed"}
-
-		# Для других событий
-		else:
-			logger.warning(f"Unhandled event type: {data.get('type')}")
-			return {"status": "skipped"}
-
-	except Exception as e:
-		logger.error(f"Error processing event: {str(e)}")
+	if not event_type:
+		logger.error("No event type in payload")
 		return {"status": "error"}
+
+	# Обработка событий страниц
+	if event_type.startswith('page.'):
+		page_id = data.get('entity', {}).get('id')
+		message = f"📝 Page event: {event_type}\nPage ID: {page_id}"
+		send_telegram_notification(message)
+		return {"status": "processed"}
+
+	# Обработка других типов событий
+	else:
+		logger.warning(f"Unhandled event type: {event_type}")
+		return {"status": "skipped"}
 
 
 @routes.route('/notion-webhook', methods=['GET', 'POST'])
