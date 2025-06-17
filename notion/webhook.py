@@ -152,7 +152,7 @@ def webhook_endpoint():
 
 		try:
 			data = request.get_json()
-			send_telegram_notification("Test message from webhook")
+			send_telegram_notification(data)
 			# После request.get_json()
 			logger.info(f"Full event type: {data.get('type')}")
 			logger.info(f"Object type: {data.get('object')}")
