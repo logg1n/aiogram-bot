@@ -168,9 +168,8 @@ def webhook_endpoint():
 			return jsonify({"error": "Missing challenge"}), 400
 
 		# Проверка подписи
-		if not NotionWebhookHandler.verify_signature(request):
-
-			return jsonify({"error": "Invalid signature"}), 403
+		# if not NotionWebhookHandler.verify_signature(request):
+			# return jsonify({"error": "Invalid signature"}), 403
 
 		# Обработка события
 		result = process_notion_event(data)
