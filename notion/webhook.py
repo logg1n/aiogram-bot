@@ -38,47 +38,36 @@ logger = setup_logging()
 
 class NotionWebhookHandler:
     @staticmethod
-    def verify_signature(request):
+    def verify_signature(request) -> bool:
         secret = os.getenv('NOTION_WEBHOOK_TOKEN')
         if not secret:
             logger.error("Notion secret not configured")
             return False
 
-        signature = request.headers.get('X-Notion-Signature')
-        if not signature:
+        signature_header = request.headers.get('X-Notion-Signature')
+        if not signature_header:
             logger.warning("Missing X-Notion-Signature header")
             return False
 
-        try:
-            # Определяем, что использовать для подписи
-            if request.content_type == 'application/json':
-                # Для обычных запросов используем сырое тело
-                body = request.get_data()
-            else:
-                # Для верификационных запросов создаем JSON с verification_token
-                body = json.dumps({"verification_token": secret})
+        # Считаем HMAC от _сырых_ байт тела
+        body_bytes = request.get_data()
 
-            logger.info(f"Body for signature: {body[:100]}...")
+        # Для отладки выведем первые 200 байт
+        logger.debug(f"Raw body for HMAC: {body_bytes[:200]!r}")
 
-            computed_signature = hmac.new(
-                secret.encode('utf-8'),
-                body.encode('utf-8') if isinstance(body, str) else body,
-                hashlib.sha256
-            ).hexdigest()
+        mac = hmac.new(secret.encode('utf-8'),
+                       body_bytes,
+                       hashlib.sha256)
+        expected = "sha256=" + mac.hexdigest()
 
-            expected_signature = f"sha256={computed_signature}"
-            result = hmac.compare_digest(signature, expected_signature)
+        logger.debug(f"Expected sig: {expected}")
+        logger.debug(f"Received sig: {signature_header}")
 
-            logger.info(f"Signature check: {'SUCCESS' if result else 'FAILED'}")
-            logger.info(f"Expected: {expected_signature}")
-            logger.info(f"Received: {signature}")
-
-            return result
-
-        except Exception as e:
-            logger.error(f"Signature verification error: {str(e)}")
+        if not hmac.compare_digest(expected, signature_header):
+            logger.error("Signature mismatch")
             return False
 
+        return True
 
 def send_telegram_notification(message: str) -> bool:
     token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -128,6 +117,10 @@ def process_notion_event(data):
     if event_type.startswith('page.'):
         page_id = data.get('entity', {}).get('id')
         message = f"📝 Page event: {event_type}\nPage ID: {page_id}"
+
+        with open('response.txt', 'a') as f:
+            f.write(data)
+
         send_telegram_notification(message)
         return {"status": "processed"}
 
