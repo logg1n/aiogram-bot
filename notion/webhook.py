@@ -139,16 +139,20 @@ def process_notion_event(data):
 
         if event_type == "page.properties_updated":
             # Получаем все свойства страницы
+            updated_properties = data.get('data', {}).get('updated_properties', [])
             properties = get_page_properties(page_id)
-            prop_data = properties.get(prop_name, {})
-            prop_type = prop_data.get('type')
-            prop_value = ""
 
-            if prop_type == "title":
-                # Обработка заголовка
-                prop_value = "".join([t["plain_text"] for t in prop_data.get("title", [])])
+            for prop_name in updated_properties:
+                prop_data = properties.get(prop_name, {})
+                prop_type = prop_data.get('type')
+                prop_value = ""
 
-            message += f"• {prop_name}: {prop_value}\n"
+                if prop_type == "title":
+                    # Обработка заголовка
+                    prop_value = "".join([t["plain_text"] for t in prop_data.get("title", [])])
+
+                message += f"• {prop_name}: {prop_value}\n"
+
         # with open('response.txt', 'a') as f:
         #     json.dump(data, f)
 
