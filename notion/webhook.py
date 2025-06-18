@@ -82,7 +82,7 @@ def send_telegram_notification(message: str) -> bool:
     payload = {
         "chat_id": chat_id,
         "text": message[:1000] or "Empty message",
-        # "parse_mode": "Markdown"  # закомментируй для теста!
+        "parse_mode": "Markdown"  # закомментируй для теста!
     }
 
     try:
@@ -103,6 +103,23 @@ def send_telegram_notification(message: str) -> bool:
     return False
 
 
+def get_page_properties(page_id):
+    NOTION_API_KEY = os.getenv('NOTION_API_KEY')  # Добавьте в .env
+    url = f"https://api.notion.com/v1/pages/{page_id}"
+
+    headers = {
+        "Authorization": f"Bearer {NOTION_API_KEY}",
+        "Notion-Version": "2022-06-28"
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json().get("properties", {})
+    except Exception as e:
+        logger.error(f"Failed to get page properties: {str(e)}")
+        return {}
+
 def process_notion_event(data):
     event_type = data.get('type')  # page.content_updated, page.properties_updated и т.д.
     entity_type = data.get('entity', {}).get('type')  # page, database, block
@@ -116,10 +133,25 @@ def process_notion_event(data):
     # Обработка событий страниц
     if event_type.startswith('page.'):
         page_id = data.get('entity', {}).get('id')
+        event_type = data.get('type')
+        entity_type = data.get('entity', {}).get('type')
         message = f"📝 Page event: {event_type}\nPage ID: {page_id}"
 
-        with open('response.txt', 'a') as f:
-            json.dump(data, f)
+        if event_type == "page.properties_updated":
+            # Получаем все свойства страницы
+            properties = get_page_properties(page_id)
+            prop_data = properties.get(prop_name, {})
+            prop_type = prop_data.get('type')
+            prop_value = ""
+
+            if prop_type == "title":
+                # Обработка заголовка
+                prop_value = "".join([t["plain_text"] for t in prop_data.get("title", [])])
+
+            message += f"• {prop_name}: {prop_value}\n"
+        # with open('response.txt', 'a') as f:
+        #     json.dump(data, f)
+
 
         send_telegram_notification(message)
         return {"status": "processed"}
