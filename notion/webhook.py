@@ -104,12 +104,13 @@ def send_telegram_notification(message: str) -> bool:
 
 
 def get_page_properties(page_id):
-    NOTION_API_KEY = os.getenv('NOTION_API_KEY')  # Добавьте в .env
+    NOTION_API_KEY = os.getenv('NOTION_TOKEN')  # Добавьте в .env
     url = f"https://api.notion.com/v1/pages/{page_id}"
 
     headers = {
         "Authorization": f"Bearer {NOTION_API_KEY}",
-        "Notion-Version": "2022-06-28"
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json"
     }
 
     try:
@@ -123,6 +124,8 @@ def get_page_properties(page_id):
 def process_notion_event(data):
     event_type = data.get('type')  # page.content_updated, page.properties_updated и т.д.
     entity_type = data.get('entity', {}).get('type')  # page, database, block
+    escape_chars = '_*[]()~`>#+-=|{}.!'
+    escape_markdown = lambda text: ''.join(f'\\{char}' if char in escape_chars else char for char in text)
 
     logger.info(f"Processing event: {event_type} (entity: {entity_type})")
 
@@ -133,14 +136,13 @@ def process_notion_event(data):
     # Обработка событий страниц
     if event_type.startswith('page.'):
         page_id = data.get('entity', {}).get('id')
-        event_type = data.get('type')
-        entity_type = data.get('entity', {}).get('type')
         message = f"📝 Page event: {event_type}\nPage ID: {page_id}"
 
         if event_type == "page.properties_updated":
             # Получаем все свойства страницы
             updated_properties = data.get('data', {}).get('updated_properties', [])
             properties = get_page_properties(page_id)
+
 
             for prop_name in updated_properties:
                 prop_data = properties.get(prop_name, {})
@@ -157,7 +159,7 @@ def process_notion_event(data):
         #     json.dump(data, f)
 
 
-        send_telegram_notification(message)
+        send_telegram_notification(escape_markdown(message))
         return {"status": "processed"}
 
     # Обработка других типов событий
