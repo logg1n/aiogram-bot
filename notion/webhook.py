@@ -119,7 +119,7 @@ def process_notion_event(data):
         message = f"📝 Page event: {event_type}\nPage ID: {page_id}"
 
         with open('response.txt', 'a') as f:
-            f.write(data)
+            json.dump(data, f)
 
         send_telegram_notification(message)
         return {"status": "processed"}
