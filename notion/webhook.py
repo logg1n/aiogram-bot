@@ -163,7 +163,8 @@ def process_notion_event(data):
         #     json.dump(data, f)
 
 
-        send_telegram_notification(escape_markdown(message))
+#        send_telegram_notification(escape_markdown(message))
+        send_telegram_notification(message)
         return {"status": "processed"}
 
     # Обработка других типов событий
