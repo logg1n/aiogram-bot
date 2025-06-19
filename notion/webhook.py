@@ -105,11 +105,16 @@ def send_telegram_notification(message: str) -> bool:
 
 
 def get_page_properties(page_id):
-    """Получает свойства страницы Notion по её ID"""
+    """Получает свойства страницы Notion с расширенной диагностикой ошибок"""
     NOTION_API_KEY = os.getenv('NOTION_TOKEN')
     if not NOTION_API_KEY:
-        logger.error("NOTION_TOKEN не найден в переменных окружения")
-        return {}
+        logger.error("❌ NOTION_TOKEN не найден в .env файле")
+        return None
+
+    # Проверяем формат ID страницы
+    if not page_id or len(page_id) != 36 or page_id.count('-') != 4:
+        logger.error(f"⚠️ Неверный формат ID страницы: {page_id}")
+        return None
 
     url = f"https://api.notion.com/v1/pages/{page_id}"
     headers = {
@@ -119,15 +124,52 @@ def get_page_properties(page_id):
     }
 
     try:
+        logger.info(f"🔍 Запрос свойств страницы: {page_id}")
         response = requests.get(url, headers=headers, timeout=10)
+
+        # Анализ ответа API
+        if response.status_code == 401:
+            logger.error("❌ Ошибка 401: Неавторизованный доступ. Проверьте NOTION_TOKEN")
+            return None
+        elif response.status_code == 404:
+            logger.error(f"❌ Ошибка 404: Страница не найдена. Убедитесь, что бот имеет доступ к странице {page_id}")
+            return None
+        elif response.status_code == 429:
+            logger.error("❌ Ошибка 429: Слишком много запросов. Попробуйте позже")
+            return None
+
         response.raise_for_status()
-        return response.json().get("properties", {})
+
+        # Проверка наличия свойств
+        data = response.json()
+        properties = data.get("properties")
+        if not properties:
+            logger.warning("⚠️ Страница не содержит свойств (пустой объект properties)")
+
+        return properties
+
     except requests.exceptions.RequestException as e:
-        logger.error(f"Ошибка при запросе свойств страницы: {e}")
-        return {}
-    except json.JSONDecodeError as e:
-        logger.error(f"Ошибка парсинга JSON: {e}")
-        return {}
+        logger.error(f"🚨 Ошибка при запросе к Notion API: {e}")
+        return None
+
+
+def debug_page_access(page_id):
+    """Проверяет доступ к странице и возвращает информацию для диагностики"""
+    NOTION_API_KEY = os.getenv('NOTION_TOKEN')
+    if not NOTION_API_KEY:
+        return "❌ NOTION_TOKEN не настроен"
+
+    url = f"https://api.notion.com/v1/pages/{page_id}"
+    headers = {
+        "Authorization": f"Bearer {NOTION_API_KEY}",
+        "Notion-Version": "2022-06-28",
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        return f"Статус: {response.status_code}\nОтвет: {response.text[:200]}"
+    except Exception as e:
+        return f"Ошибка: {str(e)}"
 
 
 def get_property_value(prop_data):
@@ -232,8 +274,25 @@ def process_notion_event(data):
             updated_properties = data.get('data', {}).get('updated_properties', [])
             properties = get_page_properties(page_id)
 
-            if not properties:
-                message += "\n⚠️ Не удалось получить свойства страницы"
+            # Формируем базовое сообщение
+            page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+            message = (
+                f"📝 *Обновление страницы*\n"
+                f"Тип события: `{event_type}`\n"
+                f"Страница: [открыть]({page_url})\n"
+            )
+
+            # Если не удалось получить свойства
+            if properties is None:
+                debug_info = debug_page_access(page_id)
+                message += (
+                    "\n⚠️ *Не удалось получить свойства страницы*\n"
+                    f"Проверьте:\n"
+                    f"1. Добавлен ли бот на страницу\n"
+                    f"2. Корректность NOTION_TOKEN\n"
+                    f"3. Доступность страницы\n\n"
+                    f"Диагностика:\n```\n{debug_info}\n```"
+                )
             else:
                 message += "\n*Измененные свойства:*\n"
                 found_updates = False
