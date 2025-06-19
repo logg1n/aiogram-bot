@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import json
 import requests
+from requests import Response
 
 from waitress import serve
 from flask import Flask, request, jsonify, Blueprint
@@ -104,7 +105,7 @@ def send_telegram_notification(message: str) -> bool:
 
 
 def get_page_properties(page_id):
-    NOTION_API_KEY = os.getenv('NOTION_TOKEN')  # Добавьте в .env
+    NOTION_API_KEY = os.getenv('NOTION_TOKEN')  # Проверь, что в .env прописано NOTION_TOKEN
     url = f"https://api.notion.com/v1/pages/{page_id}"
 
     headers = {
@@ -113,13 +114,16 @@ def get_page_properties(page_id):
         "Content-Type": "application/json"
     }
 
+    response = requests.get(url, headers=headers, timeout=5)
     try:
-        response = requests.get(url, headers=headers)
         response.raise_for_status()
         return response.json().get("properties", {})
     except Exception as e:
-        logger.error(f"Failed to get page properties: {str(e)}")
+        # Если response не определен (например, ошибка на стадии соединения), делаем проверку наличия
+        response_text = response.text if 'response' in locals() else 'No response'
+        logger.error(f"Failed to get page properties: {e}. Response: {response_text}")
         return {}
+
 
 def process_notion_event(data):
     event_type = data.get('type')  # page.content_updated, page.properties_updated и т.д.
