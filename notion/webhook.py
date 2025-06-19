@@ -105,71 +105,179 @@ def send_telegram_notification(message: str) -> bool:
 
 
 def get_page_properties(page_id):
-    NOTION_API_KEY = os.getenv('NOTION_TOKEN')  # Проверь, что в .env прописано NOTION_TOKEN
-    url = f"https://api.notion.com/v1/pages/{page_id}"
+    """Получает свойства страницы Notion по её ID"""
+    NOTION_API_KEY = os.getenv('NOTION_TOKEN')
+    if not NOTION_API_KEY:
+        logger.error("NOTION_TOKEN не найден в переменных окружения")
+        return {}
 
+    url = f"https://api.notion.com/v1/pages/{page_id}"
     headers = {
         "Authorization": f"Bearer {NOTION_API_KEY}",
+        "Content-Type": "application/json",
         "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json"
     }
 
-    response = requests.get(url, headers=headers, timeout=5)
     try:
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         return response.json().get("properties", {})
-    except Exception as e:
-        # Если response не определен (например, ошибка на стадии соединения), делаем проверку наличия
-        response_text = response.text if 'response' in locals() else 'No response'
-        logger.error(f"Failed to get page properties: {e}. Response: {response_text}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ошибка при запросе свойств страницы: {e}")
+        return {}
+    except json.JSONDecodeError as e:
+        logger.error(f"Ошибка парсинга JSON: {e}")
         return {}
 
 
-def process_notion_event(data):
-    event_type = data.get('type')  # page.content_updated, page.properties_updated и т.д.
-    entity_type = data.get('entity', {}).get('type')  # page, database, block
-    escape_chars = '_*[]()~`>#+-=|{}.!'
-    escape_markdown = lambda text: ''.join(f'\\{char}' if char in escape_chars else char for char in text)
+def get_property_value(prop_data):
+    """Извлекает значение свойства в читаемом формате"""
+    if not prop_data:
+        return ""
 
-    logger.info(f"Processing event: {event_type} (entity: {entity_type})")
+    prop_type = prop_data.get('type')
+    if not prop_type:
+        return "[unknown type]"
+
+    try:
+        # Обработка разных типов свойств
+        if prop_type == "title":
+            return "".join(t["plain_text"] for t in prop_data.get("title", []))
+
+        elif prop_type == "rich_text":
+            return "".join(t["plain_text"] for t in prop_data.get("rich_text", []))
+
+        elif prop_type == "number":
+            return str(prop_data.get("number", ""))
+
+        elif prop_type == "select":
+            select = prop_data.get("select")
+            return select["name"] if select else ""
+
+        elif prop_type == "multi_select":
+            options = prop_data.get("multi_select", [])
+            return ", ".join(opt["name"] for opt in options)
+
+        elif prop_type == "checkbox":
+            return "☑" if prop_data.get("checkbox") else "☐"
+
+        elif prop_type == "date":
+            date_obj = prop_data.get("date")
+            if not date_obj:
+                return ""
+            start = date_obj.get("start", "")
+            end = date_obj.get("end", "")
+            return f"{start} → {end}" if end else start
+
+        elif prop_type == "url":
+            return prop_data.get("url", "")
+
+        elif prop_type == "email":
+            return prop_data.get("email", "")
+
+        elif prop_type == "phone_number":
+            return prop_data.get("phone_number", "")
+
+        elif prop_type == "people":
+            people = prop_data.get("people", [])
+            return ", ".join(p.get("name", "unknown") for p in people)
+
+        elif prop_type == "files":
+            files = prop_data.get("files", [])
+            return ", ".join(f.get("name", "unnamed") for f in files)
+
+        else:
+            return f"[{prop_type}]"
+
+    except Exception as e:
+        logger.error(f"Ошибка обработки свойства {prop_type}: {e}")
+        return "[error]"
+
+
+def escape_markdown(text):
+    """Экранирует спецсимволы Markdown для Telegram"""
+    escape_chars = '_*[]()~`>#+-=|{}.!'
+    return ''.join(f'\\{char}' if char in escape_chars else char for char in str(text))
+
+
+def process_notion_event(data):
+    """Обрабатывает событие от Notion"""
+    event_type = data.get('type')
+    entity = data.get('entity', {})
+    entity_type = entity.get('type')
+    page_id = entity.get('id')
+
+    logger.info(f"Обработка события: {event_type} (сущность: {entity_type})")
 
     if not event_type:
-        logger.error("No event type in payload")
+        logger.error("Тип события не указан")
         return {"status": "error"}
 
     # Обработка событий страниц
     if event_type.startswith('page.'):
-        page_id = data.get('entity', {}).get('id')
-        message = f"📝 Page event: {event_type}\nPage ID: {page_id}"
+        if not page_id:
+            logger.error("ID страницы отсутствует")
+            return {"status": "error"}
 
+        # Базовое сообщение
+        page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+        message = (
+            f"📝 *Обновление страницы*\n"
+            f"Тип события: `{event_type}`\n"
+            f"Страница: [открыть]({page_url})\n"
+        )
+
+        # Обработка обновления свойств
         if event_type == "page.properties_updated":
-            # Получаем все свойства страницы
             updated_properties = data.get('data', {}).get('updated_properties', [])
             properties = get_page_properties(page_id)
 
+            if not properties:
+                message += "\n⚠️ Не удалось получить свойства страницы"
+            else:
+                message += "\n*Измененные свойства:*\n"
+                found_updates = False
 
-            for prop_name in updated_properties:
-                prop_data = properties.get(prop_name, {})
-                prop_type = prop_data.get('type')
-                prop_value = ""
+                for encoded_prop_id in updated_properties:
+                    try:
+                        # Декодируем ID свойства
+                        prop_id = urllib.parse.unquote(encoded_prop_id)
+                    except Exception as e:
+                        logger.error(f"Ошибка декодирования {encoded_prop_id}: {e}")
+                        continue
 
-                if prop_type == "title":
-                    # Обработка заголовка
-                    prop_value = "".join([t["plain_text"] for t in prop_data.get("title", [])])
+                    # Ищем свойство по ID
+                    prop_data = None
+                    prop_name = "unknown"
 
-                message += f"• {prop_name}: {prop_value}\n"
+                    for name, data in properties.items():
+                        if data.get('id') == prop_id:
+                            prop_data = data
+                            prop_name = name
+                            break
 
-        # with open('response.txt', 'a') as f:
-        #     json.dump(data, f)
+                    if not prop_data:
+                        message += f"• `{prop_id}`: свойство не найдено\n"
+                        continue
 
+                    # Получаем значение свойства
+                    prop_value = get_property_value(prop_data)
+                    message += (
+                        f"• *{escape_markdown(prop_name)}*: "
+                        f"{escape_markdown(prop_value)}\n"
+                    )
+                    found_updates = True
 
-#        send_telegram_notification(escape_markdown(message))
+                if not found_updates:
+                    message += "Нет доступных данных об изменениях"
+
+        # Отправка уведомления в Telegram
         send_telegram_notification(message)
         return {"status": "processed"}
 
-    # Обработка других типов событий
+    # Обработка других событий
     else:
-        logger.warning(f"Unhandled event type: {event_type}")
+        logger.warning(f"Неподдерживаемый тип события: {event_type}")
         return {"status": "skipped"}
 
 
