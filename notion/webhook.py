@@ -131,7 +131,9 @@ def get_page_properties(page_id):
                 "Content-Type": "application/json",
             }
         )
-
+        logger.info(f"------------------------------------------"
+                    f"Test Request: {test_response.status_code}"
+                    f"------------------------------------------")
 
         # Анализ ответа API
         if response.status_code == 401:
