@@ -28,11 +28,15 @@ async def cmd_start(message: Message):
 			"Content-Type": "application/json",
 		}
 	)
+	webhook = requests.get('https://test-loggiin.amvera.io/notion-webhook')
+
 
 	await message.reply(
 		f'Привет.\n Твой ID: {message.from_user.id}\n'
 		f'Имя: {message.from_user.first_name}\n'
-		f'Чат ID: {message.chat.id}',
+		f'Чат ID: {message.chat.id}'
+		f'Notion conn: {response.status_code}'
+		f'Webhook conn: {webhook.status_code}',
 		# reply_markup=await inline_cars(),
 
 	)
