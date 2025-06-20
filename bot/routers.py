@@ -17,6 +17,8 @@ router = Router()
 PAGE_NOTION = os.getenv('PARENT_PAGE_ID')
 NOTION_API_KEY = os.getenv('NOTION_TOKEN')
 
+print(PAGE_NOTION + '\n' + NOTION_API_KEY)
+
 @router.message(CommandStart())
 async def cmd_start(message: Message):
 	get_info_ticker('BTCUSDT')
@@ -34,9 +36,9 @@ async def cmd_start(message: Message):
 	await message.reply(
 		f'Привет.\n Твой ID: {message.from_user.id}\n'
 		f'Имя: {message.from_user.first_name}\n'
-		f'Чат ID: {message.chat.id}'
-		f'Notion conn: {response.status_code}'
-		f'Webhook conn: {webhook.status_code}',
+		f'Чат ID: {message.chat.id}\n'
+		f'Notion conn: {response.status_code}\n'
+		f'Webhook conn: {webhook.status_code}\n',
 		# reply_markup=await inline_cars(),
 
 	)

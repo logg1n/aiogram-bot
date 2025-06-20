@@ -8,7 +8,7 @@ from routers import router
 # Загрузка переменных
 load_dotenv()
 
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()

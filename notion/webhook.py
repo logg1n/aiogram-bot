@@ -36,13 +36,17 @@ def setup_logging():
 
 logger = setup_logging()
 
+WEBHOOK_TOKEN = os.getenv('NOTION_WEBHOOK_TOKEN')
+NOTION_TOKEN = os.getenv('NOTION_TOKEN')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 class NotionWebhookHandler:
+
     @staticmethod
     def verify_signature(request) -> bool:
-        secret = os.getenv('NOTION_WEBHOOK_TOKEN')
-        if not secret:
-            logger.error("Notion secret not configured")
+        if not WEBHOOK_TOKEN:
+            logger.error("Notion WEBHOOK_TOKEN not configured")
             return False
 
         signature_header = request.headers.get('X-Notion-Signature')
@@ -71,19 +75,16 @@ class NotionWebhookHandler:
         return True
 
 def send_telegram_notification(message: str) -> bool:
-    token = os.getenv('TELEGRAM_BOT_TOKEN')
-    chat_id = os.getenv('TELEGRAM_CHAT_ID')
-
-    if not token or not chat_id:
+    if not TELEGRAM_TOKEN or not CHAT_ID:
         logger.error("Telegram credentials not configured: "
-                     f"TOKEN={bool(token)}, CHAT_ID={bool(chat_id)}")
+                     f"TOKEN={bool(TELEGRAM_TOKEN)}, CHAT_ID={bool(CHAT_ID)}")
         return False
 
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
-        "chat_id": chat_id,
+        "chat_id": CHAT_ID,
         "text": message[:1000] or "Empty message",
-        "parse_mode": "Markdown"  # закомментируй для теста!
+        # "parse_mode": "Markdown"  # закомментируй для теста!
     }
 
     try:
@@ -106,8 +107,7 @@ def send_telegram_notification(message: str) -> bool:
 
 def get_page_properties(page_id):
     """Получает свойства страницы Notion с расширенной диагностикой ошибок"""
-    NOTION_API_KEY = os.getenv('NOTION_TOKEN')
-    if not NOTION_API_KEY:
+    if not NOTION_TOKEN:
         logger.error("❌ NOTION_TOKEN не найден в .env файле")
         return None
 
@@ -118,9 +118,9 @@ def get_page_properties(page_id):
 
     url = f"https://api.notion.com/v1/pages/{page_id}"
     headers = {
-        "Authorization": f"Bearer {NOTION_API_KEY}",
-        "Content-Type": "application/json",
+        "Authorization": f"Bearer {NOTION_TOKEN}",
         "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
     }
 
     try:
@@ -155,13 +155,12 @@ def get_page_properties(page_id):
 
 def debug_page_access(page_id):
     """Проверяет доступ к странице и возвращает информацию для диагностики"""
-    NOTION_API_KEY = os.getenv('NOTION_TOKEN')
-    if not NOTION_API_KEY:
+    if not NOTION_TOKEN:
         return "❌ NOTION_TOKEN не настроен"
 
     url = f"https://api.notion.com/v1/pages/{page_id}"
     headers = {
-        "Authorization": f"Bearer {NOTION_API_KEY}",
+        "Authorization": f"Bearer {NOTION_TOKEN}",
         "Notion-Version": "2022-06-28",
         "Content-Type": "application/json",
     }
@@ -355,7 +354,6 @@ def webhook_endpoint():
             return jsonify({
                 "status": "active",
                 "service": "notion-webhook",
-                "telegram_configured": bool(os.getenv('TELEGRAM_BOT_TOKEN'))
             }), 200
 
         if not request.is_json:
