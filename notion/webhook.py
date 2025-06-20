@@ -112,6 +112,8 @@ def get_page_properties(page_id):
         logger.error(f"⚠️ Неверный формат ID страницы: {page_id}")
         return None
 
+    logger.info(f"Webhook стартует... TOKEN = {repr(os.getenv('NOTION_TOKEN'))}")
+
     url = f"https://api.notion.com/v1/pages/{page_id}"
     headers = {
         "Authorization": f"Bearer {NOTION_TOKEN}",
@@ -134,6 +136,8 @@ def get_page_properties(page_id):
         logger.info(f"------------------------------------------"
                     f"Test Request: {test_response.status_code}"
                     f"------------------------------------------")
+
+        logger.debug(f"Final headers: {test_response.request.headers}")
 
         # Анализ ответа API
         if response.status_code == 401:
@@ -264,7 +268,7 @@ def process_notion_event(data):
 
     # Обработка событий страниц
     if event_type.startswith('page.'):
-        page_id = entity.get('id').replace('-', '')
+        page_id = entity.get('id')
         if not page_id:
             logger.error("ID страницы отсутствует")
             return {"status": "error"}
