@@ -107,10 +107,6 @@ def send_telegram_notification(message: str) -> bool:
 
 def get_page_properties(page_id):
     """Получает свойства страницы Notion с расширенной диагностикой ошибок"""
-    if not NOTION_TOKEN:
-        logger.error("❌ NOTION_TOKEN не найден в .env файле")
-        return None
-
     # Проверяем формат ID страницы
     if not page_id or len(page_id) != 36 or page_id.count('-') != 4:
         logger.error(f"⚠️ Неверный формат ID страницы: {page_id}")
