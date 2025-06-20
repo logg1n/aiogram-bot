@@ -37,7 +37,7 @@ async def cmd_start(message: Message):
 		f'Чат ID: {message.chat.id}\n'
 		f'Notion conn: {response.status_code}\n'
 		f'Webhook conn: {webhook.status_code}\n'
-		f'Price {tiker['symbol']}: {tiker['lastPrice']}',
+		f'Price {tiker.get("symbol")}: {tiker.get("lastPrice")}',
 		# reply_markup=await inline_cars(),
 
 	)
