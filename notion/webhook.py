@@ -41,6 +41,13 @@ NOTION_TOKEN = os.getenv('NOTION_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
+logger.debug('---------------------------------------')
+logger.debug(WEBHOOK_TOKEN)
+logger.debug(NOTION_TOKEN)
+logger.debug(TELEGRAM_TOKEN)
+logger.debug(CHAT_ID)
+logger.debug('---------------------------------------')
+
 class NotionWebhookHandler:
 
     @staticmethod
@@ -89,7 +96,7 @@ def send_telegram_notification(message: str) -> bool:
 
     try:
         # Отправляем JSON, чтобы Telegram сразу принял формат
-        response = requests.post(url, json=payload, timeout=5)
+        response = requests.post(url, json=payload, timeout=20)
         # Логируем статус и тело ответа, чтобы видеть текст ошибки:
         logger.info(f"Telegram API response: {response.status_code} {response.text}")
 
