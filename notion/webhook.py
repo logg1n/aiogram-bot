@@ -108,7 +108,7 @@ def send_telegram_notification(message: str) -> bool:
 def get_page_properties(page_id):
     """Получает свойства страницы Notion с расширенной диагностикой ошибок"""
     # Проверяем формат ID страницы
-    if not page_id or len(page_id) != 36 or page_id.count('-') != 4:
+    if not page_id:
         logger.error(f"⚠️ Неверный формат ID страницы: {page_id}")
         return None
 
@@ -264,13 +264,13 @@ def process_notion_event(data):
 
     # Обработка событий страниц
     if event_type.startswith('page.'):
-        page_id = entity.get('id')
+        page_id = entity.get('id').replace('-', '')
         if not page_id:
             logger.error("ID страницы отсутствует")
             return {"status": "error"}
 
         # Базовое сообщение
-        page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+        page_url = f"https://www.notion.so/{page_id}"
         message = (
             f"📝 *Обновление страницы*\n"
             f"Тип события: `{event_type}`\n"
@@ -283,7 +283,7 @@ def process_notion_event(data):
             properties = get_page_properties(page_id)
 
             # Формируем базовое сообщение
-            page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+            page_url = f"https://www.notion.so/{page_id}"
             message = (
                 f"📝 *Обновление страницы*\n"
                 f"Тип события: `{event_type}`\n"
