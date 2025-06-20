@@ -20,7 +20,7 @@ routes = Blueprint("routes", __name__)
 # Настройка логирования
 def setup_logging():
     logger = logging.getLogger('notion_webhook')
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     handler = RotatingFileHandler(
         'notion_webhook.log',
