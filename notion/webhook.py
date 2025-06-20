@@ -163,6 +163,7 @@ def debug_page_access(page_id):
     headers = {
         "Authorization": f"Bearer {NOTION_API_KEY}",
         "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
     }
 
     try:
@@ -247,7 +248,6 @@ def process_notion_event(data):
     event_type = data.get('type')
     entity = data.get('entity', {})
     entity_type = entity.get('type')
-    page_id = entity.get('id')
 
     logger.info(f"Обработка события: {event_type} (сущность: {entity_type})")
 
@@ -257,6 +257,7 @@ def process_notion_event(data):
 
     # Обработка событий страниц
     if event_type.startswith('page.'):
+        page_id = entity.get('id')
         if not page_id:
             logger.error("ID страницы отсутствует")
             return {"status": "error"}
@@ -343,12 +344,12 @@ def process_notion_event(data):
 @routes.route('/notion-webhook', methods=['GET', 'POST'])
 def webhook_endpoint():
     try:
-        logger.info(f"Token: {os.getenv('NOTION_WEBHOOK_TOKEN')[:5]}...")
-        logger.info(f"Telegram token: {os.getenv('TELEGRAM_BOT_TOKEN')[:5]}...")
-        logger.info(f"Incoming {request.method} request from {request.remote_addr}")
-        logger.info(f"Headers: {dict(request.headers)}")
-        logger.info(f"Content-Type: {request.content_type}")
-        logger.info(f"Raw body (first 200 chars): {str(request.get_data())[:200]}")
+        # logger.info(f"Token: {os.getenv('NOTION_WEBHOOK_TOKEN')[:5]}...")
+        # logger.info(f"Telegram token: {os.getenv('TELEGRAM_BOT_TOKEN')[:5]}...")
+        # logger.info(f"Incoming {request.method} request from {request.remote_addr}")
+        # logger.info(f"Headers: {dict(request.headers)}")
+        # logger.info(f"Content-Type: {request.content_type}")
+        # logger.info(f"Raw body (first 200 chars): {str(request.get_data())[:200]}")
 
         if request.method == 'GET':
             return jsonify({
@@ -396,7 +397,6 @@ def webhook_endpoint():
 app.register_blueprint(routes)
 
 if __name__ == '__main__':
-
     port = int(os.getenv('PORT', 5000))
     logger.info(f"Starting server on port {port}")
     serve(app, host="0.0.0.0", port=port)

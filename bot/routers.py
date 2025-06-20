@@ -1,3 +1,7 @@
+import requests
+import os
+
+from dotenv import load_dotenv
 from aiogram import F, Router
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
@@ -7,13 +11,29 @@ from keyboard import reply_keyboard_markup as rkm
 from keyboard import inline_keyboard_markup as ikm
 from keyboard import inline_cars
 
+load_dotenv()
 router = Router()
+
+PAGE_NOTION = os.getenv('PARENT_PAGE_ID')
+NOTION_API_KEY = os.getenv('NOTION_TOKEN')
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
+	get_info_ticker('BTCUSDT')
+	response = requests.get(
+		url=f'https://api.notion.com/v1/pages/{PAGE_NOTION}',
+		headers={
+			"Authorization": f"Bearer {NOTION_API_KEY}",
+			"Notion-Version": "2022-06-28",
+			"Content-Type": "application/json",
+		}
+	)
+
 	await message.reply(
-		f'Привет.\n Твой ID: {message.from_user.id}\nИмя: {message.from_user.first_name}\nЧат ID: {message.chat.id}',
-		reply_markup=await inline_cars(),
+		f'Привет.\n Твой ID: {message.from_user.id}\n'
+		f'Имя: {message.from_user.first_name}\n'
+		f'Чат ID: {message.chat.id}',
+		# reply_markup=await inline_cars(),
 
 	)
 
