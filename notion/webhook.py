@@ -121,7 +121,17 @@ def get_page_properties(page_id):
 
     try:
         logger.info(f"🔍 Запрос свойств страницы: {page_id}")
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=5)
+
+        test_response = requests.get(
+            url="https://api.notion.com/v1/pages/21185b6bd4cc80b0b129f2ebc68965ce",
+            headers={
+                "Authorization": "Bearer secret_epg5fxwiHdLmh58HR3K70KEbjcRssWYqnOIzrIkQyiM",
+                "Notion-Version": "2022-06-28",
+                "Content-Type": "application/json",
+            }
+        )
+
 
         # Анализ ответа API
         if response.status_code == 401:

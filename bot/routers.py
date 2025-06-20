@@ -17,11 +17,9 @@ router = Router()
 PAGE_NOTION = os.getenv('PARENT_PAGE_ID')
 NOTION_API_KEY = os.getenv('NOTION_TOKEN')
 
-print(PAGE_NOTION + '\n' + NOTION_API_KEY)
-
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-	price = get_info_ticker('BTCUSDT')
+	tiker = get_info_ticker('BTCUSDT')
 	response = requests.get(
 		url=f'https://api.notion.com/v1/pages/{PAGE_NOTION}',
 		headers={
@@ -39,7 +37,7 @@ async def cmd_start(message: Message):
 		f'Чат ID: {message.chat.id}\n'
 		f'Notion conn: {response.status_code}\n'
 		f'Webhook conn: {webhook.status_code}\n'
-		f'Price BTCUSDT: {price}',
+		f'Price {tiker['symbol']}: {tiker['lastPrice']}',
 		# reply_markup=await inline_cars(),
 
 	)
