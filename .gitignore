@@ -1,6 +1,7 @@
 # Виртуальное окружение
 venv/
 .venv/
+.env
 
 # Файлы PyCharm
 .idea/

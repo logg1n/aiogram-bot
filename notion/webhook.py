@@ -12,7 +12,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 # Инициализация
-load_dotenv('.env')
+load_dotenv()
 app = Flask(__name__)
 routes = Blueprint("routes", __name__)
 
@@ -35,6 +35,7 @@ def setup_logging():
 
 
 logger = setup_logging()
+
 
 WEBHOOK_TOKEN = os.getenv('NOTION_WEBHOOK_TOKEN')
 NOTION_TOKEN = os.getenv('NOTION_TOKEN')
@@ -119,7 +120,7 @@ def get_page_properties(page_id):
         logger.error(f"⚠️ Неверный формат ID страницы: {page_id}")
         return None
 
-    logger.info(f"Webhook стартует... TOKEN = {repr(os.getenv('NOTION_TOKEN'))}")
+    logger.info(f"Webhook стартует... TOKEN = {NOTION_TOKEN}")
 
     url = f"https://api.notion.com/v1/pages/{page_id}"
     headers = {
