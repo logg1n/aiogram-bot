@@ -1,15 +1,18 @@
 import os
-import hmac
-import hashlib
+# import hmac
+# import hashlib
 import json
-import urllib.parse
+import logging
+import requests
+
+from typing import Dict, List
 from notion_client import Client
 from waitress import serve
 from flask import Flask, request, jsonify, Blueprint
 from dotenv import load_dotenv, set_key, get_key
-import logging
-from logging.handlers import RotatingFileHandl
-import requests
+from logging.handlers import RotatingFileHandler
+
+from utilites import Utils
 
 # Инициализация
 load_dotenv()
@@ -19,19 +22,19 @@ routes = Blueprint("routes", __name__)
 
 # Настройка логирования
 def setup_logging():
-	logger = logging.getLogger('notion_webhook')
-	logger.setLevel(logging.DEBUG)
+    logger = logging.getLogger('notion_webhook')
+    logger.setLevel(logging.DEBUG)
 
-	handler = RotatingFileHandler(
-		'notion_webhook.log',
-		maxBytes=1024 * 1024,
-		backupCount=3
-	)
-	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-	handler.setFormatter(formatter)
-	logger.addHandler(handler)
+    handler = RotatingFileHandler(
+        'notion_webhook.log',
+        maxBytes=1024 * 1024,
+        backupCount=3
+    )
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
-	return logger
+    return logger
 
 
 logger = setup_logging()
@@ -44,127 +47,165 @@ WEBHOOK_TOKEN = os.getenv("NOTION_WEBHOOK_TOKEN")
 
 
 class NotionWebhookHandler:
-	@staticmethod
-	def verify_signature(request) -> bool:
-		if not WEBHOOK_TOKEN:
-			logger.error("Notion WEBHOOK_TOKEN not configured")
-			return False
+    @staticmethod
+    def verify_signature(request) -> bool:
+        if not WEBHOOK_TOKEN:
+            logger.error("Notion WEBHOOK_TOKEN not configured")
+            return False
 
-		signature_header = request.headers.get('X-Notion-Signature')
-		if not signature_header:
-			logger.warning("Missing X-Notion-Signature header")
-			return False
+        signature_header = request.headers.get('X-Notion-Signature')
+        if not signature_header:
+            logger.warning("Missing X-Notion-Signature header")
+            return False
 
-		body_bytes = request.get_data()
-		mac = hmac.new(WEBHOOK_TOKEN.encode('utf-8'), body_bytes, hashlib.sha256)
-		expected = "sha256=" + mac.hexdigest()
+        body_bytes = request.get_data()
+        mac = hmac.new(WEBHOOK_TOKEN.encode('utf-8'), body_bytes, hashlib.sha256)
+        expected = "sha256=" + mac.hexdigest()
 
-		if not hmac.compare_digest(expected, signature_header):
-			logger.error("Signature mismatch")
-			return False
+        if not hmac.compare_digest(expected, signature_header):
+            logger.error("Signature mismatch")
+            return False
 
-		return True
+        return True
+
+def send_telegram_notification(message: str) -> bool:
+    if not TELEGRAM_TOKEN or not CHAT_ID:
+        logger.error("Telegram credentials not configured")
+        return False
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": message[:1000] or "Empty message",
+        "parse_mode": "Markdown"
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=20)
+        response.raise_for_status()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send Telegram notification: {str(e)}")
+        return False
+
+def format_notion_telegram_message(results: List[dict]) -> str:
+    if not results:
+        return "⚠️ Обновление получено, но данные страницы не были извлечены."
+
+    messages = []
+    for entry in results:
+        lines = [f"📄 <b>Обновлена запись:</b>"]
+
+        for key, value in entry.items():
+            lines.append(f"<b>{key}:</b> {value if value not in (None, '', []) else '—'}")
+
+        messages.append("\n".join(lines))
+
+    return "\n\n".join(messages)
 
 
-	def send_telegram_notification(message: str) -> bool:
-		if not TELEGRAM_TOKEN or not CHAT_ID:
-			logger.error("Telegram credentials not configured")
-			return False
+def get_update_blocks(db_id, ids):
+    info = []
 
-		url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-		payload = {
-			"chat_id": CHAT_ID,
-			"text": message[:1000] or "Empty message",
-			"parse_mode": "Markdown"
-		}
-		try:
-			response = requests.post(url, json=payload, timeout=20)
-			response.raise_for_status()
-			return True
-		except Exception as e:
-			logger.error(f"Failed to send Telegram notification: {str(e)}")
-			return False
+    for block_id in ids:
+        try:
+            block = notion.blocks.retrieve(block_id)
+            parent = block.get('parent', {})
 
+            # Прямо внутри базы
+            if ((parent.get('type') == 'database_id' and parent.get('database_id') == db_id)
+                    and block.get("type") == 'child_page'):
+                info.append(block.get("id"))
 
-def get_page_properties(page_id: str):
-	"""Получает свойства страницы через Notion SDK"""
-	try:
-		page = notion.pages.retrieve(page_id=page_id)
-		return page.get("properties", {})
-	except Exception as e:
-		logger.error(f"Notion SDK error: {str(e)}")
-		return None
+        except Exception as e:
+            logger.warning(f"❌ Ошибка при обработке блока {block_id}: {e}")
+
+    return info
 
 
-def process_notion_event(data):
-	event_type = data.get('type')
-	entity = data.get('entity', {})
-	entity_type = entity.get('type')
+def process_notion_event(raw):
+    event_type = raw.get('type')
+    entity = raw.get('entity', {})
+    data = raw.get('data', {}).get("updated_blocks", [])
+    entity_type = entity.get('type')
+    entity_id = entity.get('id')
 
-	logger.info(f"Processing event: {event_type} (entity: {entity_type})")
+    logger.info(f"📌 Обработка события: {event_type} (entity_type: {entity_type}, id: {entity_id})")
 
-	if event_type == "page.properties_updated":
-		page_id = entity.get('id')
-		updated_properties = data.get('data', {}).get('updated_properties', [])
+    result: List[Dict] = []
 
-		properties = get_page_properties(page_id)
-		if not properties:
-			return {"status": "error"}
+    if event_type == "database.content_updated":
+        update_blocks_id = [bl.get('id') for bl in data]
+        logger.info(f"🔎 Получено {len(update_blocks_id)} изменённых block_id")
 
-		message = "📝 *Page Updated*\n"
-		for prop_id in updated_properties:
-			prop_name = next((name for name, prop in properties.items()
-							  if prop.get('id') == prop_id), prop_id)
-			message += f"- {prop_name}\n"
+        update_block = get_update_blocks(entity_id, update_blocks_id)
+        logger.info(f"🧩 После фильтрации осталось {len(update_block)} блоков с type=child_page")
 
-		send_telegram_notification(message)
+        for id in update_block:
+            try:
+                page = notion.pages.retrieve(id)
+                properties: Dict = page.get('properties', {})
+                values: Dict = {}
 
-		return {"status": "processed"}
+                for field, prop in properties.items():
+                    values[field] = Utils.extract_property_value(prop)
 
-	return {"status": "skipped"}
+                result.append(values)
+                logger.debug(f"✅ Извлечены данные страницы {id[:8]}: {values}")
+            except Exception as e:
+                logger.warning(f"❌ Ошибка при извлечении страницы {id}: {e}")
+
+    # Можно в будущем добавить обработку:
+    # elif event_type == "database.schema_updated":
+    #     ...
+
+    message = format_notion_telegram_message(result)
+    logger.info(f"📤 Готовим сообщение к отправке: {message[:120]}...")
+    send_telegram_notification(message)
+
+    return result
 
 
 @routes.route('/notion-webhook', methods=['GET', 'POST'])
 def webhook_endpoint():
-	try:
-		if request.method == 'GET':
-			return jsonify({"status": "active"}), 200
+    try:
+        if request.method == 'GET':
+            return jsonify({"status": "active"}), 200
 
-		if not request.is_json:
-			return jsonify({"error": "Content-Type must be application/json"}), 400
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 400
 
-		data = request.get_json()
+        data = request.get_json()
 
-		if 'verification_token' in data:
-			logger.info(f"📬 Получен verification_token: {data['verification_token'][:8]}...")
+        if 'verification_token' in data:
+            logger.info(f"📬 Получен verification_token: {data['verification_token'][:8]}...")
 
-			# Сохраняем в .env, если не сохранён
-			if not get_key('.env', 'NOTION_WEBHOOK_TOKEN'):
-				set_key('.env', 'NOTION_WEBHOOK_TOKEN', data['verification_token'])
-				logger.info("🔐 verification_token сохранён в .env")
+            # Сохраняем в .env, если не сохранён
+            if not get_key('.env', 'NOTION_WEBHOOK_TOKEN'):
+                set_key('.env', 'NOTION_WEBHOOK_TOKEN', data['verification_token'])
+                logger.info("🔐 verification_token сохранён в .env")
 
-			# Возвращаем challenge для подтверждения
-			return jsonify({"challenge": data['verification_token']}), 200
+            # Возвращаем challenge для подтверждения
+            return jsonify({"challenge": data['verification_token']}), 200
 
-		if data.get('type') == 'webhook_verification':
-			logger.info(f"📡 Верификация вебхука прошла успешно: challenge={data['challenge']}")
+        if data.get('type') == 'webhook_verification':
+            logger.info(f"📡 Верификация вебхука прошла успешно: challenge={data['challenge']}")
 
-			return jsonify({"challenge": data['challenge']}), 200
+            return jsonify({"challenge": data['challenge']}), 200
 
-		# if not NotionWebhookHandler.verify_signature(request):
-		# 	return jsonify({"error": "Invalid signature"}), 403
+        # if not NotionWebhookHandler.verify_signature(request):
+        # 	return jsonify({"error": "Invalid signature"}), 403
 
-		result = process_notion_event(data)
-		return jsonify(result), 200
+        result = process_notion_event(data)
+        return jsonify(result), 200
 
-	except Exception as e:
-		logger.exception("Webhook error")
-		return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.exception("Webhook error")
+        return jsonify({"error": str(e)}), 500
 
 
 app.register_blueprint(routes)
 
 if __name__ == '__main__':
-	port = int(os.getenv('PORT', 5000))
-	logger.info(f"Starting server on port {port}")
-	serve(app, host="0.0.0.0", port=port)
+    port = int(os.getenv('PORT', 5000))
+    logger.info(f"Starting server on port {port}")
+    serve(app, host="0.0.0.0", port=port)
