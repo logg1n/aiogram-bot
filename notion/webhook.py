@@ -42,13 +42,6 @@ NOTION_TOKEN = os.getenv('NOTION_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-logger.debug('---------------------------------------')
-logger.debug(WEBHOOK_TOKEN[:7])
-logger.debug(NOTION_TOKEN[:7])
-logger.debug(TELEGRAM_TOKEN[:7])
-logger.debug(CHAT_ID[:7])
-logger.debug('---------------------------------------')
-
 class NotionWebhookHandler:
 
     @staticmethod
@@ -123,29 +116,16 @@ def get_page_properties(page_id):
     logger.info(f"Webhook стартует... TOKEN = {NOTION_TOKEN[:7]}")
 
     url = f"https://api.notion.com/v1/pages/{page_id}"
+
     headers = {
         "Authorization": f"Bearer {NOTION_TOKEN}",
         "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
     }
 
     try:
         logger.info(f"🔍 Запрос свойств страницы: {page_id}")
-        response = requests.get(url, headers=headers, timeout=20)
-
-        # test_response = requests.get(
-        #     url="https://api.notion.com/v1/pages/21185b6bd4cc80b0b129f2ebc68965ce",
-        #     headers={
-        #         "Authorization": "Bearer secret_epg5fxwiHdLmh58HR3K70KEbjcRssWYqnOIzrIkQyiM",
-        #         "Notion-Version": "2022-06-28",
-        #         "Content-Type": "application/json",
-        #     }
-        # )
-        # logger.info(f"------------------------------------------"
-        #             f"Test Request: {test_response.status_code}"
-        #             f"------------------------------------------")
-        # logger.debug(f"Final headers: {test_response.request.headers}")
-
+        response = requests.get(url, headers=headers)
 
         # Анализ ответа API
         if response.status_code == 401:
@@ -171,25 +151,6 @@ def get_page_properties(page_id):
     except requests.exceptions.RequestException as e:
         logger.error(f"🚨 Ошибка при запросе к Notion API: {e}")
         return None
-
-
-def debug_page_access(page_id):
-    """Проверяет доступ к странице и возвращает информацию для диагностики"""
-    if not NOTION_TOKEN:
-        return "❌ NOTION_TOKEN не настроен"
-
-    url = f"https://api.notion.com/v1/pages/{page_id}"
-    headers = {
-        "Authorization": f"Bearer {NOTION_TOKEN}",
-        "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json",
-    }
-
-    try:
-        response = requests.get(url, headers=headers, timeout=20)
-        return f"Статус: {response.status_code}\nОтвет: {response.text[:200]}"
-    except Exception as e:
-        return f"Ошибка: {str(e)}"
 
 
 def get_property_value(prop_data):
@@ -304,14 +265,12 @@ def process_notion_event(data):
 
             # Если не удалось получить свойства
             if properties is None:
-                debug_info = debug_page_access(page_id)
                 message += (
                     "\n⚠️ *Не удалось получить свойства страницы*\n"
                     f"Проверьте:\n"
                     f"1. Добавлен ли бот на страницу\n"
                     f"2. Корректность NOTION_TOKEN\n"
                     f"3. Доступность страницы\n\n"
-                    f"Диагностика:\n```\n{debug_info}\n```"
                 )
             else:
                 message += "\n*Измененные свойства:*\n"
@@ -363,13 +322,6 @@ def process_notion_event(data):
 @routes.route('/notion-webhook', methods=['GET', 'POST'])
 def webhook_endpoint():
     try:
-        # logger.info(f"Token: {os.getenv('NOTION_WEBHOOK_TOKEN')[:5]}...")
-        # logger.info(f"Telegram token: {os.getenv('TELEGRAM_BOT_TOKEN')[:5]}...")
-        # logger.info(f"Incoming {request.method} request from {request.remote_addr}")
-        # logger.info(f"Headers: {dict(request.headers)}")
-        # logger.info(f"Content-Type: {request.content_type}")
-        # logger.info(f"Raw body (first 200 chars): {str(request.get_data())[:200]}")
-
         if request.method == 'GET':
             return jsonify({
                 "status": "active",
@@ -384,9 +336,6 @@ def webhook_endpoint():
             data = request.get_json()
 
             # После request.get_json()
-            logger.info(f"Full event type: {data.get('type')}")
-            logger.info(f"Object type: {data.get('object')}")
-            logger.info(f"Parsed JSON data: {data}")
         except Exception as e:
             logger.error(f"JSON parse error: {str(e)}")
             raise
