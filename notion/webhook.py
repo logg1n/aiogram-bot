@@ -186,7 +186,7 @@ def debug_page_access(page_id):
     }
 
     try:
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=20)
         return f"Статус: {response.status_code}\nОтвет: {response.text[:200]}"
     except Exception as e:
         return f"Ошибка: {str(e)}"
