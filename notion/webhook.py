@@ -144,8 +144,8 @@ def get_page_properties(page_id):
         # logger.info(f"------------------------------------------"
         #             f"Test Request: {test_response.status_code}"
         #             f"------------------------------------------")
+        # logger.debug(f"Final headers: {test_response.request.headers}")
 
-        logger.debug(f"Final headers: {test_response.request.headers}")
 
         # Анализ ответа API
         if response.status_code == 401:
