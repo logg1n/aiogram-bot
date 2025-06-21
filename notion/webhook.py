@@ -43,10 +43,10 @@ TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 logger.debug('---------------------------------------')
-logger.debug(WEBHOOK_TOKEN)
-logger.debug(NOTION_TOKEN)
-logger.debug(TELEGRAM_TOKEN)
-logger.debug(CHAT_ID)
+logger.debug(WEBHOOK_TOKEN[:7])
+logger.debug(NOTION_TOKEN[:7])
+logger.debug(TELEGRAM_TOKEN[:7])
+logger.debug(CHAT_ID[:7])
 logger.debug('---------------------------------------')
 
 class NotionWebhookHandler:
@@ -120,7 +120,7 @@ def get_page_properties(page_id):
         logger.error(f"⚠️ Неверный формат ID страницы: {page_id}")
         return None
 
-    logger.info(f"Webhook стартует... TOKEN = {NOTION_TOKEN}")
+    logger.info(f"Webhook стартует... TOKEN = {NOTION_TOKEN[:7]}")
 
     url = f"https://api.notion.com/v1/pages/{page_id}"
     headers = {
@@ -131,7 +131,7 @@ def get_page_properties(page_id):
 
     try:
         logger.info(f"🔍 Запрос свойств страницы: {page_id}")
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=20)
 
         # test_response = requests.get(
         #     url="https://api.notion.com/v1/pages/21185b6bd4cc80b0b129f2ebc68965ce",
