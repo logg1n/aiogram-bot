@@ -27,7 +27,7 @@ async def fetch_ticker():
 async def fetch_webhook_status():
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get('https://test-loggiin.amvera.io/notion-webhook') as resp:
+            async with session.get('https://loggiin.pythonanywhere.com/notion-webhook') as resp:
                 return resp.status
     except Exception as e:
         return f"Error: {e}"

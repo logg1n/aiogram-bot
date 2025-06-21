@@ -6,9 +6,10 @@ import urllib.parse
 from notion_client import Client
 from waitress import serve
 from flask import Flask, request, jsonify, Blueprint
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key, get_key
 import logging
-from logging.handlers import RotatingFileHandler
+from logging.handlers import RotatingFileHandl
+import requests
 
 # Инициализация
 load_dotenv()
@@ -65,25 +66,24 @@ class NotionWebhookHandler:
 		return True
 
 
-def send_telegram_notification(message: str) -> bool:
-	if not TELEGRAM_TOKEN or not CHAT_ID:
-		logger.error("Telegram credentials not configured")
-		return False
+	def send_telegram_notification(message: str) -> bool:
+		if not TELEGRAM_TOKEN or not CHAT_ID:
+			logger.error("Telegram credentials not configured")
+			return False
 
-	url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-	payload = {
-		"chat_id": CHAT_ID,
-		"text": message[:1000] or "Empty message",
-		"parse_mode": "Markdown"
-	}
-
-	try:
-		response = requests.post(url, json=payload, timeout=20)
-		response.raise_for_status()
-		return True
-	except Exception as e:
-		logger.error(f"Failed to send Telegram notification: {str(e)}")
-		return False
+		url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+		payload = {
+			"chat_id": CHAT_ID,
+			"text": message[:1000] or "Empty message",
+			"parse_mode": "Markdown"
+		}
+		try:
+			response = requests.post(url, json=payload, timeout=20)
+			response.raise_for_status()
+			return True
+		except Exception as e:
+			logger.error(f"Failed to send Telegram notification: {str(e)}")
+			return False
 
 
 def get_page_properties(page_id: str):
@@ -94,24 +94,6 @@ def get_page_properties(page_id: str):
 	except Exception as e:
 		logger.error(f"Notion SDK error: {str(e)}")
 		return None
-
-
-def update_page_title(page_id: str, new_title: str) -> bool:
-	"""Обновляет заголовок страницы через Notion SDK"""
-	try:
-		notion.pages.update(
-			page_id=page_id,
-			properties={
-				"title": {
-					"title": [{"text": {"content": new_title}}]
-				}
-			}
-		)
-		logger.info(f"Title updated to: {new_title}")
-		return True
-	except Exception as e:
-		logger.error(f"Failed to update title: {str(e)}")
-		return False
 
 
 def process_notion_event(data):
@@ -137,10 +119,6 @@ def process_notion_event(data):
 
 		send_telegram_notification(message)
 
-		# Пример обновления заголовка
-		if "title" in updated_properties:
-			update_page_title(page_id, "New Updated Title")
-
 		return {"status": "processed"}
 
 	return {"status": "skipped"}
@@ -157,7 +135,20 @@ def webhook_endpoint():
 
 		data = request.get_json()
 
+		if 'verification_token' in data:
+			logger.info(f"📬 Получен verification_token: {data['verification_token'][:8]}...")
+
+			# Сохраняем в .env, если не сохранён
+			if not get_key('.env', 'NOTION_WEBHOOK_TOKEN'):
+				set_key('.env', 'NOTION_WEBHOOK_TOKEN', data['verification_token'])
+				logger.info("🔐 verification_token сохранён в .env")
+
+			# Возвращаем challenge для подтверждения
+			return jsonify({"challenge": data['verification_token']}), 200
+
 		if data.get('type') == 'webhook_verification':
+			logger.info(f"📡 Верификация вебхука прошла успешно: challenge={data['challenge']}")
+
 			return jsonify({"challenge": data['challenge']}), 200
 
 		# if not NotionWebhookHandler.verify_signature(request):
