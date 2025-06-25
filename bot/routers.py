@@ -69,21 +69,55 @@ async def cmd_start(message: Message):
 
     await message.answer(response, parse_mode="Markdown")
 
+@router.message(F.text.startswith("/myinfo"))
+async def myinfo(message: Message):
+    telegram_id = str(message.from_user.id)
 
-@router.message(Command('chatid'))
-async def send_chat_id(message: Message):
-    chat_id = message.chat.id
-    response_text = f"🆔 Ваш chat_id: `{chat_id}`"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"http://127.0.0.1:8000/api/user-info/?telegram_id={telegram_id}"
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    response = (
+                        f"👤 Имя: {data.get('username')}\n"
+                        f"📧 Email: {data.get('email')}\n"
+                        f"📱 Телефон: {data.get('phone_number') or 'не указан'}"
+                    )
+                    await message.answer(response)
+                elif resp.status == 404:
+                    await message.answer("❌ Ты ещё не зарегистрирован. Введи команду /register email@example.com для регистрации.")
+                else:
+                    error_data = await resp.json()
+                    await message.answer(f"⚠️ Ошибка: {error_data.get('error', 'Неизвестная ошибка')}")
+    except Exception as e:
+        await message.answer(f"🚨 Ошибка при соединении с API: {e}")
 
-    # Для групп/каналов добавляем дополнительную информацию
-    if message.chat.type != 'private':
-        response_text += (
-            f"\n\nℹ️ Дополнительно:\n"
-            f"Тип чата: `{message.chat.type}`\n"
-            f"Название: `{message.chat.title}`"
-        )
 
-    await message.reply(response_text, parse_mode='Markdown')
+@router.message(F.text.startswith("/register"))
+async def register_user(message: Message):
+    parts = message.text.strip().split()
+    if len(parts) != 2:
+        await message.answer("⚠️ Используй: /register твой_email@example.com")
+        return
+
+    email = parts[1]
+    telegram_id = str(message.from_user.id)
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "http://127.0.0.1:8000/api/register-telegram/",
+                json={"email": email, "telegram_id": telegram_id}
+            ) as resp:
+                data = await resp.json()
+                if resp.status == 200:
+                    await message.answer("✅ Telegram ID успешно привязан!")
+                else:
+                    await message.answer(f"❌ Ошибка: {data.get('error', 'Неизвестная ошибка')}")
+    except Exception as e:
+        await message.answer(f"⚠️ Ошибка при соединении с API: {e}")
 
 
 @router.message(Command('help'))

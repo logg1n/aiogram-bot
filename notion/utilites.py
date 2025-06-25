@@ -1,7 +1,7 @@
 import os
 
 from pprint import  pprint
-from typing import Any
+from typing import Any, Dict, List
 
 from notion_client import Client
 from dotenv import load_dotenv
@@ -40,6 +40,74 @@ class Utils:
 				return [p.get("name", "") for p in prop.get("people", [])]
 			case _:
 				return f"[{prop.get("type")}]"
+
+	def format_notion_telegram_message(results: List[dict], with_links: bool = True) -> str:
+		from datetime import datetime
+
+		if not results:
+			return "⚠️ Обновление получено, но данные страницы не были извлечены."
+
+		messages = []
+
+		for entry in results:
+			lines = []
+
+			ticker = entry.get("Тикер", "Без тикера")
+			deal_type = entry.get("Тип сделки", "Сделка")
+			status = entry.get("Статус", "")
+			page_id = entry.get("id")
+
+			# 🟢 Статус → эмодзи
+			status_emoji = {
+				"Активна": "🟢",
+				"Закрыта": "🔴",
+				"Отменена": "⚪",
+			}.get(status, "⚙️")
+
+			# 📈 Тип сделки → эмодзи
+			deal_emoji = {
+				"Long": "📈",
+				"Short": "📉",
+			}.get(deal_type, "💼")
+
+			header = f"{status_emoji} <b>{ticker}</b> — {deal_emoji} <i>{deal_type}</i> <code>{status}</code>"
+
+			if with_links and page_id:
+				clean_id = page_id.replace("-", "")
+				url = f"https://www.notion.so/{clean_id}"
+				header += f"\n🔗 <a href=\"{url}\">Открыть в Notion</a>"
+
+			lines.append(header)
+			lines.append("")
+
+			for field, value in entry.items():
+				if field in ("Тикер", "Статус", "Тип сделки", "id"):
+					continue
+
+				if isinstance(value, str) and field == "Дата сделки":
+					try:
+						value = datetime.fromisoformat(value.replace("Z", "+00:00")).strftime("%d.%m.%Y")
+					except Exception:
+						pass
+
+				if value in (None, "", [], {}):
+					value = "—"
+
+				# Добавляем эмодзи к ключевым полям
+				field_emoji = {
+					"Дата сделки": "🗓",
+					"Цена входа": "💰",
+					"Цена выхода": "🏁",
+					"Объем": "📦",
+					"Комиссии": "💸",
+					"Комментарий": "📝",
+				}.get(field, "•")
+
+				lines.append(f"{field_emoji} <b>{field}:</b> {value}")
+
+			messages.append("\n".join(lines))
+
+		return "\n\n".join(messages)
 
 
 if __name__ == "__main__":

@@ -77,7 +77,7 @@ def send_telegram_notification(message: str) -> bool:
     payload = {
         "chat_id": CHAT_ID,
         "text": message[:1000] or "Empty message",
-        "parse_mode": "Markdown"
+        "parse_mode": "HTML"
     }
     try:
         response = requests.post(url, json=payload, timeout=20)
@@ -87,20 +87,25 @@ def send_telegram_notification(message: str) -> bool:
         logger.error(f"Failed to send Telegram notification: {str(e)}")
         return False
 
-def format_notion_telegram_message(results: List[dict]) -> str:
-    if not results:
-        return "⚠️ Обновление получено, но данные страницы не были извлечены."
+def extract_page_properties(page_id: str) -> dict:
+    try:
+        page = notion.pages.retrieve(page_id)
+        properties = page.get("properties", {})
+        values = {}
+        for field, prop in properties.items():
+            values[field] = Utils.extract_property_value(prop)
+        return values
+    except Exception as e:
+        logger.error(f"❌ Не удалось извлечь свойства страницы {page_id}: {e}")
+        return {}
 
-    messages = []
-    for entry in results:
-        lines = [f"📄 <b>Обновлена запись:</b>"]
-
-        for key, value in entry.items():
-            lines.append(f"<b>{key}:</b> {value if value not in (None, '', []) else '—'}")
-
-        messages.append("\n".join(lines))
-
-    return "\n\n".join(messages)
+def is_page_in_database(page_id: str) -> bool:
+    try:
+        page = notion.pages.retrieve(page_id)
+        return page.get("parent", {}).get("type") == "database_id"
+    except Exception as e:
+        logger.warning(f"⚠️ Не удалось проверить принадлежность страницы {page_id}: {e}")
+        return False
 
 
 def get_update_blocks(db_id, ids):
@@ -125,41 +130,51 @@ def get_update_blocks(db_id, ids):
 def process_notion_event(raw):
     event_type = raw.get('type')
     entity = raw.get('entity', {})
-    data = raw.get('data', {}).get("updated_blocks", [])
+    data = raw.get('data', {})
     entity_type = entity.get('type')
     entity_id = entity.get('id')
 
-    logger.info(f"📌 Обработка события: {event_type} (entity_type: {entity_type}, id: {entity_id})")
+    logger.info(f"📌 Событие: {event_type} (entity: {entity_type}, id: {entity_id})")
 
-    result: List[Dict] = []
+    result: List[dict] = []
 
     if event_type == "database.content_updated":
-        update_blocks_id = [bl.get('id') for bl in data]
-        logger.info(f"🔎 Получено {len(update_blocks_id)} изменённых block_id")
-
+        update_blocks_id = [bl.get('id') for bl in data.get("updated_blocks", [])]
         update_block = get_update_blocks(entity_id, update_blocks_id)
-        logger.info(f"🧩 После фильтрации осталось {len(update_block)} блоков с type=child_page")
-
         for id in update_block:
-            try:
-                page = notion.pages.retrieve(id)
-                properties: Dict = page.get('properties', {})
-                values: Dict = {}
+            result.append(extract_page_properties(id))
 
-                for field, prop in properties.items():
-                    values[field] = Utils.extract_property_value(prop)
+    elif event_type == "database.schema_updated":
+        logger.info("📐 Обновлена схема базы данных. Можно добавить логику изменения типов/структуры.")
 
-                result.append(values)
-                logger.debug(f"✅ Извлечены данные страницы {id[:8]}: {values}")
-            except Exception as e:
-                logger.warning(f"❌ Ошибка при извлечении страницы {id}: {e}")
+    elif event_type == "page.created":
+        if is_page_in_database(entity_id):
+            result.append(extract_page_properties(entity_id))
+            logger.info(f"🆕 Создана новая страница в базе: {entity_id[:8]}")
 
-    # Можно в будущем добавить обработку:
-    # elif event_type == "database.schema_updated":
-    #     ...
+    elif event_type == "page.properties_updated":
+        if is_page_in_database(entity_id):
+            result.append(extract_page_properties(entity_id))
+            logger.info(f"🛠 Изменены свойства страницы {entity_id[:8]}")
 
-    message = format_notion_telegram_message(result)
-    logger.info(f"📤 Готовим сообщение к отправке: {message[:120]}...")
+    elif event_type == "page.content_updated":
+        if is_page_in_database(entity_id):
+            logger.info(f"✏️ Изменено содержимое страницы {entity_id[:8]} — но свойства остались прежними")
+
+    elif event_type == "page.moved":
+        logger.info(f"📦 Страница {entity_id[:8]} была перемещена — можно отследить изменение parent")
+
+    elif event_type == "page.deleted":
+        logger.warning(f"🗑 Удалена страница {entity_id[:8]}")
+
+    elif event_type == "page.undeleted":
+        logger.info(f"♻️ Страница {entity_id[:8]} восстановлена")
+
+    else:
+        logger.warning(f"⚠️ Необработанный тип события: {event_type}")
+
+    # Отправка Telegram
+    message = Utils.format_notion_telegram_message(result)
     send_telegram_notification(message)
 
     return result
